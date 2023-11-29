@@ -1,0 +1,19 @@
+version: '3.9'
+services:
+  workspace:
+    image: mcr.microsoft.com/dotnet/sdk:8.0
+    volumes:
+      - ../..:/workspaces:cached
+    # Overrides default command so things don't shut down after the process ends.
+    command: sleep infinity
+    network_mode: service:qdrant
+  qdrant:
+    image: qdrant/qdrant
+    ports:
+      - 6333:6333 # REST API and Web UI
+      - 6334:6334 # GRPC API
+    volumes:
+      - qdrant_data:/qdrant/storage:z
+
+volumes:
+  qdrant_data:

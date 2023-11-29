@@ -1,40 +1,54 @@
 global using Microsoft.SemanticKernel;
 using System.Text.Json;
-using Microsoft.KernelMemory;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.SemanticKernel.Planners;
+using minimal_semantic_kernel_api.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 
 var config = new ConfigurationBuilder()
                 .SetBasePath(Directory.GetCurrentDirectory())
+                .AddEnvironmentVariables()
+                .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
                 .AddJsonFile("appsettings.Development.json", optional: true, reloadOnChange: true)
                 .Build();
 
-// Get model, apiKey, endpoint and openaiKey from appsettings.json
-var model = config.GetSection("Values").GetValue<string>("model");
-var apiKey = config.GetSection("Values").GetValue<string>("apiKey");
-var endpoint = config.GetSection("Values").GetValue<string>("endpoint");
-var openaiKey = config.GetSection("Values").GetValue<string>("openaiKey");
+// Get model, apiKey, endpoint and openaiKey from environment variables or appsettings.json
+var model = Environment.GetEnvironmentVariable("model") ?? config.GetSection("Values").GetValue<string>("model");
+var apiKey = Environment.GetEnvironmentVariable("apiKey") ?? config.GetSection("Values").GetValue<string>("apiKey");
+var qdrant = Environment.GetEnvironmentVariable("qdrant") ?? config.GetSection("Values").GetValue<string>("qdrant");
 
+// Check if model, apiKey, endpoint and openaiKey are set
+if (string.IsNullOrEmpty(model) || string.IsNullOrEmpty(apiKey))
+{
+    Console.WriteLine("Please set model, apiKey, endpoint and openaiKey in appsettings.json");
+    return;
+}
+
+
+// Build a kernel
+var kernel = new KernelBuilder()
+              .WithOpenAIChatCompletionService(model, apiKey)
+              .Build();
+
+
+// Get plugins directory path
+var pluginsDirectory = Path.Combine(Directory.GetCurrentDirectory(), "Plugins");
 
 app.MapGet("/", () => "Welcome to Semantic Kernel!");
 
-///plugins/FunPlugin/invoke/Joke?query=Tell%20me%20a%20joke
-app.MapPost("plugins/{pluginName}/invoke/{functionName}", async (HttpContext context, string query, string pluginName, string functionName) =>
+
+/*****************************************************************************************
+*********************************** Semantic Functions ***********************************
+*****************************************************************************************/
+app.MapPost("plugins/{pluginName}/invoke/{functionName}", async (HttpContext context, string pluginName, string functionName, [FromBody] UserAsk userAsk) =>
 {
     try
     {
-        var kernel = new KernelBuilder()
-                            .WithAzureOpenAIChatCompletionService(deploymentName: model, endpoint: endpoint, apiKey: apiKey)
-                            .Build();
-
-
-        var pluginsDirectory = Path.Combine(Directory.GetCurrentDirectory(), "Plugins");
-
         var funPluginFunctions = kernel.ImportSemanticFunctionsFromDirectory(pluginsDirectory, pluginName);
 
-        var result = await kernel.RunAsync(query, funPluginFunctions[functionName]);
+        var result = await kernel.RunAsync(userAsk.Ask, funPluginFunctions[functionName]);
 
         return Results.Json(new { answer = result.GetValue<string>() });
 
@@ -48,16 +62,14 @@ app.MapPost("plugins/{pluginName}/invoke/{functionName}", async (HttpContext con
 
 });
 
-// Que Semantic Kernel elija los plugins que considere para contestar a mi pregunta
+
+/*****************************************************************************************
+*********************************** Planner *********************************************
+*****************************************************************************************/
 app.MapGet("planner", async (HttpContext context, string query) =>
 {
-    var kernel = new KernelBuilder()
-                    .WithAzureOpenAIChatCompletionService(model, endpoint, apiKey)
-                    .Build();
-
     var planner = new SequentialPlanner(kernel);
 
-    var pluginsDirectory = Path.Combine(Directory.GetCurrentDirectory(), "Plugins");
     kernel.ImportSemanticFunctionsFromDirectory(pluginsDirectory, "FunPlugin");
 
     var plan = await planner.CreatePlanAsync(query);
@@ -75,25 +87,17 @@ app.MapGet("planner", async (HttpContext context, string query) =>
 
 });
 
-// ChatGPT plugin: https://github.com/microsoft/semantic-kernel-starters/tree/main/sk-csharp-chatgpt-plugin
-app.MapGet("chatgpt_plugin", async (HttpContext context, string query) =>
-{
 
+/*****************************************************************************************
+*********************************** Kernel Memory ****************************************
+*****************************************************************************************/
 
-});
-
-
-// Kernel Memory
-
-// Load documents
-Plugins.MemoryPlugin.MemoryKernel.Init(openaiKey);
+// First, load some documents... about Minecraft! 😙
+Plugins.MemoryPlugin.MemoryKernel.Init(apiKey, qdrant);
 
 app.MapGet("memory", async (HttpContext context, string query) =>
 {
-    var kernel = new KernelBuilder()
-                    .WithAzureOpenAIChatCompletionService(model, endpoint, apiKey)
-                    .Build();
-
+    kernel.ImportSemanticFunctionsFromDirectory(pluginsDirectory, "FunPlugin");
     var memoryPlugin = kernel.ImportFunctions(new Plugins.MemoryPlugin.MemoryKernel(), "MemoryPlugin");
 
     var planner = new SequentialPlanner(kernel);
@@ -105,7 +109,16 @@ app.MapGet("memory", async (HttpContext context, string query) =>
 
     var result = await kernel.RunAsync(plan);
 
-    return Results.Json(JsonSerializer.Deserialize<Answer>(result.GetValue<string>()));
+    Console.WriteLine(result);
+
+    try
+    {
+        return Results.Json(JsonSerializer.Deserialize<Answer>(result.GetValue<string>()));
+    }
+    catch (System.Exception)
+    {
+        return Results.Json(new { answer = result.GetValue<string>() });
+    }
 
 });
 

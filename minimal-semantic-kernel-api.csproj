@@ -1,18 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net7.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>minimal_semantic_kernel_api</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.SemanticKernel" Version="1.0.0-beta6" />
-    <PackageReference Include="Microsoft.KernelMemory.Core" Version="0.9.231113.2-preview" />
+    <PackageReference Include="Microsoft.SemanticKernel" Version="1.0.0-beta8" />
+    <PackageReference Include="Microsoft.KernelMemory.Core" Version="0.11.231121.1-preview" />
   </ItemGroup>
 
-  <!-- Copy appsettings.json always -->
   <ItemGroup>
     <None Update="appsettings.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
@@ -20,7 +19,15 @@
 
     <None Update="appsettings.Development.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>   
+    </None>
+
+    <None Update="docs\**\*.pdf">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+
+    <None Update="Plugins\**\*">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
 
   </ItemGroup>
 

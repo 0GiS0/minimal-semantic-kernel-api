@@ -1,0 +1,20 @@
+### Semantic Functions
+POST http://localhost:5170/plugins/FunPlugin/invoke/Joke HTTP/1.1
+content-type: application/json
+
+{
+    "ask": "Cuentame un chiste sobre Minecraft"    
+}
+
+
+### Planner
+GET http://localhost:5170/planner?query=cuentame un chiste HTTP/1.1
+
+### Planner + Native Functions & Kernel Memory
+GET http://localhost:5170/memory?query=quienes son los ponentes de esta charla HTTP/1.1
+
+###
+GET http://localhost:5170/memory?query=quien puede ayudarme con Minecraft HTTP/1.1
+
+###
+GET http://localhost:5170/memory?query=como puedo sobrevivir la primera noche en Minecraft HTTP/1.1

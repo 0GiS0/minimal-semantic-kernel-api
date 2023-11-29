@@ -8,13 +8,28 @@ namespace Plugins.MemoryPlugin;
 public class MemoryKernel
 {
 
-    static Memory memory;
+    static MemoryServerless memory;
 
-    public static void Init(string apiKey)
+    public static void Init(string apiKey, string qdrantHost)
     {
-        memory = new KernelMemoryBuilder()
-                          .WithOpenAIDefaults(apiKey)
-                         .BuildServerlessClient();
+
+        KernelMemoryBuilder kernel;
+
+        if (!string.IsNullOrEmpty(qdrantHost))
+        {            
+            kernel = new KernelMemoryBuilder()
+                        .WithOpenAIDefaults(apiKey)
+                        .WithQdrant(qdrantHost);
+
+        }
+        else
+        {
+            kernel = new KernelMemoryBuilder()
+                         .WithOpenAIDefaults(apiKey);
+
+        }
+
+        memory = kernel.BuildServerlessClient();
 
         LoadTextMemories();
         LoadDocs();
@@ -22,9 +37,10 @@ public class MemoryKernel
 
     static async void LoadTextMemories()
     {
-        await memory.ImportTextAsync("Carlos Mendible, Manuel Sánchez y Gisela Torres son los ponentes de esta charla", "charla");
-        await memory.ImportTextAsync("Gisela fue MVP en 2010 y 2011 de Windows Azure 🤣", "gisela");
-        await memory.ImportTextAsync("Manu es el único MVP en esta charla", "manu");
+        await memory.ImportTextAsync("Carlos Mendible, Manuel Sánchez y Gisela Torres son los ponentes de esta charla", documentId: "charla", tags: new TagCollection { { "type", "people" } });
+        await memory.ImportTextAsync("Gisela fue MVP en 2010 y 2011 de Windows Azure", documentId: "gisela", tags: new TagCollection { { "type", "people" } });
+        await memory.ImportTextAsync("Carlos fue MVP del 2017 al 2021 de Developer Technologies y Azure (es el más viejo)", documentId: "carlos", tags: new TagCollection { { "type", "people" } });
+        await memory.ImportTextAsync("Manu es el único MVP en esta charla", documentId: "manu", tags: new TagCollection { { "type", "people" } });
 
     }
 
@@ -33,7 +49,6 @@ public class MemoryKernel
         await memory.ImportDocumentAsync("docs/Guia completa 2022.pdf", documentId: "doc001");
         await memory.ImportDocumentAsync("docs/Minecraft_la_guia_definitiva.pdf", documentId: "doc002");
     }
-
 
     [SKFunction, Description("Responde preguntas sobre Minecraft")]
     public static async Task<string> Minecraft(string ask)
@@ -53,11 +68,11 @@ public class MemoryKernel
         return JsonSerializer.Serialize(new { answer = answer.Result, references = answer.RelevantSources.Select(x => x.SourceName) });
     }
 
-    [SKFunction, Description("Responde preguntas sobre la charla y personas que aparecen en esta charla")]
+    [SKFunction, Description("Responde preguntas sobre la charla y personas que imparten en esta charla")]
     public static async Task<string> Charla(string ask)
     {
 
-        var answer = await memory.AskAsync(ask);
+        var answer = await memory.AskAsync(ask, filter: new MemoryFilter().ByTag("type", "people"));
 
         // Answer
         Console.WriteLine($"\nAnswer: {answer.Result}");
